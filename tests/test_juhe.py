@@ -151,14 +151,26 @@ class TestNewsAPI:
 # ============================================================
 
 @pytest.mark.juhe
-class TestErrorHandling:
-    """异常场景"""
+class TestEdgeCases:
+    """边界/异常场景测试
 
-    def test_invalid_api_action(self, api):
-        """无效的 API 路径应返回错误"""
-        # 聚合数据对错误参数的返回格式
-        data = api.get_jokes(page=1, pagesize=20)  # pagesize 上限内
-        # 不传 key 参数时会有 HTTP 错误，这里验证正常调用不报错
+    测试目标：
+      - API 返回格式是否规范（error_code 字段必须存在）
+      - 超大页码等边界输入是否能正确处理而不崩溃
+    """
+
+    def test_api_response_has_error_code_field(self, api):
+        """
+        验证聚合数据 API 响应格式规范
+
+        聚合数据所有接口的返回 JSON 都有 error_code 字段：
+          - error_code=0 表示成功
+          - 非 0 表示失败（reason 字段说明原因）
+
+        这是聚合数据的约定，确认 API 客户端正确返回了 JSON 响应。
+        """
+        # 用合法的 pagesize=20（上限内）请求，验证返回格式
+        data = api.get_jokes(page=1, pagesize=20)
         assert "error_code" in data, "返回数据应有 error_code 字段"
 
     def test_large_page_number(self, api):

@@ -1,14 +1,19 @@
 """
-一言 API 测试（无需 Key，开箱即用）
-===================================
-这是三个 API 中唯一不需要注册的，先跑它体验"真实 API 测试"的感觉。
+==========================================================================
+一言 API 测试（无需 Key，开箱即用！）
+==========================================================================
+这是三个 API 中唯一不需要注册的，新手先跑它建立信心！
 
-测试套路：
-  1. 状态码检查 → 200 OK
-  2. 响应结构检查 → 必需字段都存在
-  3. 字段类型检查 → id是int, hitokoto是str
-  4. 业务逻辑检查 → 句子不为空，分类在合法范围内
-  5. 异常场景 → 无效分类的处理
+测试套路（这是 API 自动化测试的标准五步法）：
+  ① 状态码检查 → 200 OK（或通过 raise_for_status 隐式检查）
+  ② 响应结构检查 → 必需字段都存在（data["xxx"] 不报 KeyError）
+  ③ 字段类型检查 → id 是 int、hitokoto 是 str（类型不对说明接口变了）
+  ④ 业务逻辑检查 → 句子不为空、分类在合法范围内
+  ⑤ 异常场景测试 → 无效分类参数能否正确处理
+
+参考面试话术：
+  "我先跑冒烟测试确认 API 通不通，然后验证响应结构和字段类型，
+   再覆盖业务逻辑和异常场景。每一步都有断言，失败能快速定位问题。"
 
 运行：
   pytest tests/test_hitokoto.py -v
@@ -26,7 +31,14 @@ from apis.hitokoto_api import HitokotoAPI, CATEGORIES
 
 @pytest.fixture(scope="module")
 def api():
-    """创建 API 客户端（module 级别复用）"""
+    """
+    创建一言 API 客户端（module 级别复用）
+
+    为什么用 module scope？
+    - HitokotoAPI 是无状态的，多个测试共享一个实例完全安全
+    - 避免每个测试函数都 new 一个对象，减少 GC 压力
+    - 如果将来需要隔离（比如登录态），可以改成 function scope
+    """
     return HitokotoAPI()
 
 
@@ -38,27 +50,37 @@ class TestHitokotoBasic:
     """基础请求测试 —— 验证 API 是否可用"""
 
     def test_get_random_sentence(self, api):
-        """测试获取随机句子 —— 最基础的冒烟测试"""
+        """
+        冒烟测试 —— 获取随机句子，验证完整响应结构
+
+        这是整个项目最核心的测试方法，展示了 API 测试的标准套路：
+        ① HTTP 状态码（API 客户端的 raise_for_status 已处理）
+        ② 响应字段存在性（用循环断言 required_fields）
+        ③ 字段类型正确性（isinstance 检查，类型不对说明接口改了）
+        ④ 业务数据合理性（句子非空、分类合法）
+        """
         data = api.get_sentence()
 
-        # 1. 状态码（通过 raise_for_status 已检查）
-        # 2. 响应结构
+        # ① HTTP 状态码 —— API 客户端中 raise_for_status 已检查，200 才往下走
+
+        # ② 响应结构检查：所有必需字段必须存在
         required_fields = ["id", "uuid", "hitokoto", "type", "from", "creator"]
         for field in required_fields:
             assert field in data, f"缺少必需字段: {field}"
 
-        # 3. 字段类型
+        # ③ 字段类型检查：API 返回的字段类型必须和文档一致
         assert isinstance(data["id"], int), f"id 应为 int，实际 {type(data['id'])}"
         assert isinstance(data["hitokoto"], str), f"hitokoto 应为 str"
         assert isinstance(data["type"], str), f"type 应为 str"
         assert isinstance(data["from"], str), f"from 应为 str"
 
-        # 4. 业务逻辑
+        # ④ 业务逻辑检查：数据在业务上必须合理
         assert len(data["hitokoto"]) > 0, "句子不应为空"
         assert data["type"] in CATEGORIES, (
             f"分类 '{data['type']}' 不在已知分类中"
         )
 
+        # print 输出帮助开发者快速看到返回了什么（不参与断言）
         print(f"\n  📝 句子: {data['hitokoto'][:60]}...")
         print(f"  📂 分类: {CATEGORIES.get(data['type'], '未知')}")
         print(f"  📖 来源: {data['from']}")

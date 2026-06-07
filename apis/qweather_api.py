@@ -25,11 +25,27 @@ class QWeatherAPI:
         self.timeout = timeout
 
     def _get(self, endpoint: str, **params) -> dict:
-        """通用 GET 请求（自动附加 API Key）"""
+        """
+        通用 GET 请求 —— 所有 API 调用的统一入口
+
+        自动附加 API Key 到请求参数中，让上层方法不用每次传 key。
+        这是 API 客户端封装的核心：把重复的认证/URL拼接/错误处理集中到一处。
+
+        Args:
+            endpoint: API 路径，如 "weather/now"、"air/now"
+            **params: 业务参数，如 location、keyword 等
+
+        Returns:
+            解析后的 JSON 字典
+
+        Raises:
+            requests.HTTPError: HTTP 状态码非 2xx 时抛出
+        """
+        # 自动注入 API Key（和风天气的认证方式：参数中传 key）
         params["key"] = self.api_key
         url = f"{self.base_url}/{endpoint}"
         resp = requests.get(url, params=params, timeout=self.timeout)
-        resp.raise_for_status()
+        resp.raise_for_status()  # 非 200 直接抛异常，测试用例不用手动检查状态码
         return resp.json()
 
     # ============================================================

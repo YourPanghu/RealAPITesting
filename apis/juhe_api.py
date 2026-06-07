@@ -26,11 +26,27 @@ class JuheAPI:
         self.timeout = timeout
 
     def _get(self, endpoint: str, **params) -> dict:
-        """通用 GET 请求（自动附加 key）"""
+        """
+        通用 GET 请求 —— 所有 API 调用的统一入口
+
+        自动附加 key（聚合数据的认证方式）到请求参数中。
+        集中处理 URL 拼接、超时、异常，上层方法只需关心业务参数。
+
+        Args:
+            endpoint: API 路径，如 "joke/content/list.php"、"toutiao/index"
+            **params: 业务参数，如 page、news_type 等
+
+        Returns:
+            解析后的 JSON 字典（聚合数据格式：{"error_code": 0, "reason": "...", "result": {...}}）
+
+        Raises:
+            requests.HTTPError: HTTP 状态码非 2xx 时抛出
+        """
+        # 自动注入 AppKey（聚合数据的认证方式：参数中传 key）
         params["key"] = self.api_key
         url = f"{self.base_url}/{endpoint}"
         resp = requests.get(url, params=params, timeout=self.timeout)
-        resp.raise_for_status()
+        resp.raise_for_status()  # 非 200 直接抛异常
         return resp.json()
 
     # ============================================================

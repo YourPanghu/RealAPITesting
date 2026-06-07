@@ -55,7 +55,23 @@ def api():
 
 
 def load_cities():
-    """从 CSV 加载城市测试数据"""
+    """
+    从 CSV 文件加载城市测试数据，用于 parametrize 数据驱动测试
+
+    数据格式（data/cities.csv）：
+      city,location_id,province
+      深圳,101280601,广东
+      广州,101280101,广东
+      ...
+
+    返回格式：[(city, location_id, province), ...]
+    这个三元组会被 @pytest.mark.parametrize 拆开传给测试函数的三个参数。
+
+    为什么用 CSV 而不是硬编码？
+      - 新增城市只需编辑 CSV，不用改测试代码
+      - 非技术人员（PM/QA）也能维护测试数据
+      - CSV 是通用格式，可以 Excel 编辑后导出
+    """
     cities = []
     csv_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -107,7 +123,13 @@ class TestNowWeather:
 
     @pytest.mark.parametrize("city,location_id,province", load_cities())
     def test_now_weather_multi_cities(self, api, city, location_id, province):
-        """数据驱动：多城市实况天气批量测试"""
+        """
+        数据驱动测试：使用 CSV 中的 8 个城市批量测试实况天气
+
+        parametrize 会把 load_cities() 返回的列表拆开，
+        每个城市生成一个独立的测试用例，互不影响。
+        如果某个城市失败，其他城市照样跑完 —— 这一点非常有用。
+        """
         data = api.get_now_weather(location_id)
 
         assert data["code"] == "200", (
