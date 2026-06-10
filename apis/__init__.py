@@ -11,6 +11,6 @@ RealAPITesting - API 客户端封装层（类似 Page Object 模式）
 
 三个 API 客户端：
   hitokoto_api.py —— 一言：随机句子，无需 Key，零门槛上手
-  qweather_api.py —— 和风天气：实况/预报/空气质量，免费 1000次/天
+  qweather_api.py —— 和风天气：实况/预报/空气质量，免费 50,000次/月
   juhe_api.py     —— 聚合数据：笑话/新闻，免费注册可用
 """

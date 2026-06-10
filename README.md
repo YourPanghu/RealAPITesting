@@ -56,8 +56,8 @@ pytest tests/test_hitokoto.py -v
 cp .env.example .env
 
 # 编辑 .env，填入你的 Key
-# QWEATHER_API_KEY=你的和风天气key    ← 注册 https://devapi.qweather.com/
-# JUHE_API_KEY=你的聚合数据key         ← 注册 https://www.juhe.cn/
+# QWEATHER_API_KEY=你的和风天气key    ← 注册 https://dev.qweather.com/
+# JUHE_API_KEY=新闻的key,笑话的key     ← 注册 https://www.juhe.cn/（支持多 Key 逗号分隔）
 ```
 
 ### 4. 跑全部测试
@@ -79,7 +79,7 @@ pytest tests/test_hitokoto.py -v
 | API | 提供方 | 需要 Key | 免费额度 | 测试用例数 |
 |-----|--------|---------|----------|-----------|
 | 一言 | hitokoto.cn | ❌ 不需要 | 无限 | 8 |
-| 和风天气 | devapi.qweather.com | ✅ 免费注册 | 1000次/天 | 14 |
+| 和风天气 | dev.qweather.com | ✅ 免费注册 | 50,000次/月 | 14 |
 | 聚合数据 | juhe.cn | ✅ 免费注册 | 各接口不同 | 8 |
 
 **总共 30 个测试用例**
@@ -104,8 +104,9 @@ pytest tests/test_hitokoto.py -v
 - 异常场景：无效城市 ID / 空参数
 
 ### 聚合数据（Juhe）
-- 笑话 API：列表 + 翻页不重复
+- 笑话 API：列表 + 翻页不重复（新版必传 time 时间戳参数）
 - 新闻 API：推荐/国内/科技/体育 多分类
+- 多 Key 自动切换：不同接口用不同 Key 时自动 fallback
 - 异常场景：超大页码
 
 ---
@@ -127,7 +128,8 @@ def test_weather(api):
 ### API Key 管理
 - `.env` 文件存 Key，不提交 Git
 - `.env.example` 是模板，可以提交
-- 没 Key 时测试自动跳过，不影响 CI 跑其他测试
+- 没 Key 时测试自动跳过（含 API 连接预检），不影响 CI 跑其他测试
+- 聚合数据支持**多 Key 逗号分隔**，不同接口自动匹配可用 Key
 
 ### 测试套路
 ```

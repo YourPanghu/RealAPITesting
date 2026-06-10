@@ -24,9 +24,9 @@
 |------|------|--------|------|
 | 1 | `.env.example` | API Key 长什么样，为什么用 .env | 1 分钟 |
 | 2 | `.gitignore` | `.env` 被忽略，不会提交到 GitHub | 30 秒 |
-| 3 | `config.py` | **重点**：Config 单例、`_load_dotenv()`、`has_xxx_key()` 的安全校验 | 5 分钟 |
+| 3 | `config.py` | **重点**：Config 单例、`_load_dotenv()`、`has_xxx_key()` 的安全校验、多 Key 逗号分隔解析 | 5 分钟 |
 
-> 🔑 **核心知识点**：`has_qweather_key()` 检查 `"your_"` 不在 key 里 —— 这样即使用了 `.env.example` 的占位符也不会发出无效请求。
+> 🔑 **核心知识点**：`has_qweather_key()` 检查 `"your_"` 不在 key 里 —— 这样即使用了 `.env.example` 的占位符也不会发出无效请求。聚合数据的 `JUHE_API_KEYS` 支持逗号分隔多个 Key，解决不同接口订阅不同 Key 的问题。
 
 ### 第二步：理解"API 怎么封装的"
 
@@ -34,10 +34,10 @@
 |------|------|--------|------|
 | 4 | `apis/__init__.py` | Page Object 思想的文档说明 | 2 分钟 |
 | 5 | `apis/hitokoto_api.py` | 最简单的 API 客户端 —— 只有 2 个方法 | 5 分钟 |
-| 6 | `apis/qweather_api.py` | **重点**：`_get()` 统一入口模式 | 5 分钟 |
-| 7 | `apis/juhe_api.py` | 和 qweather 同一个模式，看 `is_success()` | 3 分钟 |
+| 6 | `apis/qweather_api.py` | **重点**：`_get()` 统一入口模式、天气/地理双 Host 架构、`verify_connection()` 预检 | 5 分钟 |
+| 7 | `apis/juhe_api.py` | **重点**：多 Key 自动切换的 `_get()`、`is_success()`、笑话 API 必传 time 时间戳 | 5 分钟 |
 
-> 🔑 **核心知识点**：`_get(self, endpoint, **params)` 是三合一 —— **URL 拼接 + 自动注入 Key + 异常处理**。上层方法只需要传业务参数。
+> 🔑 **核心知识点**：`_get(self, endpoint, **params)` 是四合一 —— **URL 拼接 + 自动注入 Key + 认证失败自动换 Key + 异常处理**。上层方法只需要传业务参数。聚合数据不同接口可能用不同 Key，`_get` 遇到 10001 等认证错误会自动切换下一个 Key。
 
 ### 第三步：理解"测试怎么写的"
 
@@ -133,7 +133,11 @@ ROOT_DIR = Path(__file__).parent
 class Config:
     def __init__(self):
         self._load_dotenv()
+        # 单 Key
         self.SOME_API_KEY = os.getenv("SOME_API_KEY", "")
+        # 多 Key（逗号分隔，如 KEY1,KEY2）
+        _raw = os.getenv("MULTI_API_KEY", "")
+        self.MULTI_API_KEYS = [k.strip() for k in _raw.split(",") if k.strip()]
         self.SOME_BASE_URL = "https://api.example.com"
 
     def _load_dotenv(self):
@@ -164,17 +168,30 @@ def get_config():
 import requests
 
 class XxxAPI:
-    def __init__(self, api_key: str, base_url: str, timeout: int = 10):
-        self.api_key = api_key
+    # 需要切换 Key 重试的认证错误码
+    _AUTH_ERRORS = {10001, 10002, 10003}
+
+    def __init__(self, api_keys: list, base_url: str, timeout: int = 10):
+        self.api_keys = api_keys  # 支持多个 Key 自动切换
         self.base_url = base_url
         self.timeout = timeout
 
     def _get(self, endpoint: str, **params) -> dict:
-        params["key"] = self.api_key
-        url = f"{self.base_url}/{endpoint}"
-        resp = requests.get(url, params=params, timeout=self.timeout)
-        resp.raise_for_status()
-        return resp.json()
+        """带多 Key 自动切换的通用请求"""
+        for i, key in enumerate(self.api_keys):
+            params["key"] = key
+            url = f"{self.base_url}/{endpoint}"
+            resp = requests.get(url, params=params, timeout=self.timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            # 成功直接返回，认证错误换下一个 Key
+            if data.get("error_code") == 0:
+                return data
+            if data.get("error_code") in self._AUTH_ERRORS:
+                if i < len(self.api_keys) - 1:
+                    continue
+            return data
+        return {"error_code": -1, "reason": "所有 Key 都不可用"}
 
     def get_something(self, param1: str) -> dict:
         return self._get("something/endpoint", param1=param1)
@@ -250,10 +267,10 @@ class TestXxxEdgeCases:
         assert "error" in data or data["code"] != "200"
 ```
 
-### 4.6 条件跳过（无 Key 自动 skip） ⭐⭐
+### 4.6 条件跳过（无 Key 自动 skip + 连接预检） ⭐⭐
 
 ```python
-# 盲敲目标：30 秒写出条件跳过逻辑
+# 盲敲目标：30 秒写出带连接预检的条件跳过逻辑
 cfg = get_config()
 SKIP_REASON = None
 if not cfg.has_xxx_key():
@@ -263,8 +280,15 @@ if not cfg.has_xxx_key():
 def api():
     if SKIP_REASON:
         pytest.skip(SKIP_REASON)
-    return XxxAPI(api_key=cfg.XXX_API_KEY)
+    client = XxxAPI(api_keys=cfg.XXX_API_KEYS)
+    # 连接预检：Key 格式有效不代表能用，发一个轻量请求验证
+    is_valid, msg = client.verify_connection()
+    if not is_valid:
+        pytest.skip(f"XXX API Key 不可用:\n{msg}")
+    return client
 ```
+
+> 🔑 **进阶技巧**：`verify_connection()` 是连接预检模式 —— 格式检查（`has_xxx_key()`）只能过滤占位符，网络验证才能确认 Key 是否真的激活了。在 fixture 里做，所有依赖该 fixture 的测试自动受益。
 
 ---
 
@@ -324,6 +348,8 @@ RealAPITesting/
 - [ ] `parametrize` 比手写多个测试函数好在哪里？
 - [ ] CSV 数据驱动的 `load_cities()` 返回什么格式？
 - [ ] 没有 API Key 时测试怎么跳过？跳过的代码在哪里？
+- [ ] `verify_connection()` 连接预检和 `has_xxx_key()` 格式检查有什么区别？为什么两个都要？
+- [ ] 聚合数据多 Key 自动切换是怎么实现的？什么错误码会触发切换？
 - [ ] 翻页不重复的断言逻辑怎么写？
 - [ ] 如果接口新增了一个字段，哪些测试需要改？
 
