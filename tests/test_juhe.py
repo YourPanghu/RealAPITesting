@@ -44,7 +44,7 @@ if not cfg.has_juhe_key():
 def api():
     if SKIP_REASON:
         pytest.skip(SKIP_REASON)
-    return JuheAPI(api_key=cfg.JUHE_API_KEY)
+    return JuheAPI(api_keys=cfg.JUHE_API_KEYS)
 
 
 @pytest.fixture(scope="module")

@@ -40,7 +40,11 @@ class Config:
         # ============================================================
         # 聚合数据配置
         # ============================================================
-        self.JUHE_API_KEY = os.getenv("JUHE_API_KEY", "")
+        # 支持多个 Key（用逗号分隔），适用于不同接口订阅了不同 Key 的场景
+        # 例如：JUHE_API_KEY=news_key,joke_key
+        _juhe_raw = os.getenv("JUHE_API_KEY", "")
+        self.JUHE_API_KEY = _juhe_raw  # 保留原始值（向后兼容）
+        self.JUHE_API_KEYS = [k.strip() for k in _juhe_raw.split(",") if k.strip()]
         self.JUHE_BASE_URL = "https://v.juhe.cn"
 
         # ============================================================
@@ -74,9 +78,14 @@ class Config:
                     "your_" not in self.QWEATHER_API_KEY)
 
     def has_juhe_key(self) -> bool:
-        """检查是否配置了有效的聚合数据 Key（策略同 has_qweather_key）"""
-        return bool(self.JUHE_API_KEY and
-                    "your_" not in self.JUHE_API_KEY)
+        """
+        检查是否配置了有效的聚合数据 Key（策略同 has_qweather_key）
+        支持逗号分隔的多个 Key，只要有一个有效格式就返回 True
+        """
+        return any(
+            k and "your_" not in k
+            for k in self.JUHE_API_KEYS
+        )
 
 
 # ==================================================================
