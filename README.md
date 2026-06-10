@@ -1,6 +1,7 @@
 # RealAPITesting - 真实国内 API 测试实战
 
 [![GitHub](https://img.shields.io/badge/GitHub-YourPanghu%2FRealAPITesting-blue?logo=github)](https://github.com/YourPanghu/RealAPITesting)
+[![API Tests](https://github.com/YourPanghu/RealAPITesting/actions/workflows/test.yml/badge.svg)](https://github.com/YourPanghu/RealAPITesting/actions/workflows/test.yml)
 
 > 🎯 对接真实国内第三方 API，用 Pytest 做接口自动化测试  
 > 📍 这是 [FirstPro](https://github.com/YourPanghu/FirstPro) 学习路线的第 9 站

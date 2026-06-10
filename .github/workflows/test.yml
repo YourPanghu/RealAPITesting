@@ -1,0 +1,77 @@
+# ============================================================================
+# RealAPITesting - CI/CD 自动化测试流水线
+# ============================================================================
+# 触发条件：每次 push 到 master / 发起 Pull Request / 手动触发
+#
+# 工作流程：
+#   1. 拉代码 → 装 Python → 装依赖
+#   2. 注入 API Key（从 GitHub Secrets 读取，未配置则相应测试自动 skip）
+#   3. 运行全部 30 个测试用例
+#   4. 生成 HTML 报告 → 上传为构建产物
+#
+# GitHub Secrets 配置说明：
+#   在仓库 Settings → Secrets and variables → Actions → New repository secret
+#   需要添加：
+#     QWEATHER_API_KEY  = 你的和风天气 Key
+#     JUHE_API_KEY      = 你的聚合数据 Key（支持逗号分隔多个）
+#   注意：不配置 Secret 不影响 CI 通过，对应测试会自动 skip
+# ============================================================================
+
+name: API Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:        # 允许手动触发（GitHub 网页上点按钮）
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10     # API 测试最多跑 10 分钟，超时就停
+
+    steps:
+      # -------------------- 第 1 步：拉取代码 --------------------
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      # -------------------- 第 2 步：安装 Python --------------------
+      - name: 安装 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # -------------------- 第 3 步：安装依赖 --------------------
+      - name: 安装项目依赖
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # -------------------- 第 4 步：运行测试 --------------------
+      # API Key 从 GitHub Secrets 注入为环境变量
+      # 如果 Secret 没配，os.getenv() 返回空字符串，测试自动 skip
+      - name: 运行全部测试
+        env:
+          QWEATHER_API_KEY: ${{ secrets.QWEATHER_API_KEY }}
+          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
+        run: |
+          pytest tests/ -v --tb=short --html=reports/report.html --self-contained-html
+
+      # -------------------- 第 5 步：上传测试报告 --------------------
+      # 测试报告会保留 30 天，可在 GitHub Actions 页面下载
+      - name: 上传 HTML 测试报告
+        uses: actions/upload-artifact@v4
+        if: always()    # 即使测试失败也上传报告（方便排查）
+        with:
+          name: test-report
+          path: reports/report.html
+          retention-days: 30
+
+      # -------------------- 第 6 步：在 Actions 摘要里显示结果 --------------------
+      - name: 测试结果摘要
+        if: always()
+        run: |
+          echo "📊 报告已生成，点击上方 Artifacts 下载 test-report"
+          echo "🔗 和风天气: https://dev.qweather.com/"
+          echo "🔗 聚合数据: https://www.juhe.cn/"
