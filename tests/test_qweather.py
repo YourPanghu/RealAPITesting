@@ -9,7 +9,7 @@
   5. 异常场景：无效城市 ID 的错误处理
 
 前置条件：
-  1. 注册 https://devapi.qweather.com/ 获取免费 Key
+  1. 注册 https://dev.qweather.com/docs/api/ 进入控制台 --> 项目管理 --> 创建项目 --> 创建凭证  获取免费 Key
   2. 将 Key 写入 .env 文件：QWEATHER_API_KEY=你的key
   3. 或设置环境变量：export QWEATHER_API_KEY=你的key
 
@@ -29,17 +29,22 @@ from apis.qweather_api import QWeatherAPI
 
 
 # ============================================================
-# 检查 API Key 是否配置
+# 检查 API Key 是否配置 + 是否有效
 # ============================================================
 cfg = get_config()
 SKIP_REASON = None
+
 if not cfg.has_qweather_key():
     SKIP_REASON = (
         "未配置和风天气 API Key。\n"
-        "  1. 注册 https://devapi.qweather.com/\n"
+        "  1. 注册 https://dev.qweather.com/\n"
         "  2. 将 Key 写入 .env 文件：QWEATHER_API_KEY=你的key\n"
         "  3. 然后重新运行测试"
     )
+else:
+    # Key 格式看起来有效，但还需要验证是否真的能用
+    # 这里先不做网络验证（避免导入时卡顿），在 fixture 中验证
+    pass
 
 
 # ============================================================
@@ -48,10 +53,23 @@ if not cfg.has_qweather_key():
 
 @pytest.fixture(scope="module")
 def api():
-    """创建和风天气 API 客户端"""
+    """
+    创建和风天气 API 客户端，并验证 Key 是否有效
+
+    如果 Key 格式没问题但实际请求返回 403/认证失败，
+    会 skip 所有依赖此 fixture 的测试，并给出明确的修复指引。
+    """
     if SKIP_REASON:
         pytest.skip(SKIP_REASON)
-    return QWeatherAPI(api_key=cfg.QWEATHER_API_KEY)
+
+    client = QWeatherAPI(api_key=cfg.QWEATHER_API_KEY)
+
+    # 连接验证：发一个轻量请求确认 Key 有效
+    is_valid, msg = client.verify_connection()
+    if not is_valid:
+        pytest.skip(f"和风天气 API Key 不可用:\n{msg}")
+
+    return client
 
 
 def load_cities():

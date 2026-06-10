@@ -47,6 +47,26 @@ def api():
     return JuheAPI(api_key=cfg.JUHE_API_KEY)
 
 
+@pytest.fixture(scope="module")
+def joke_api_available(api):
+    """
+    检查笑话 API 是否已订阅
+
+    聚合数据每个接口需要单独申请订阅。新闻 API 和笑话 API 是独立的，
+    有可能新闻 API 可用但笑话 API 未订阅（返回 error_code=10001）。
+    """
+    data = api.get_jokes(page=1, pagesize=1)
+    if not api.is_success(data):
+        error_code = data.get("error_code")
+        reason = data.get("reason", "未知错误")
+        if error_code in (10001, 10002, 10003):
+            pytest.skip(
+                f"笑话 API 未订阅或 Key 无效 (error_code={error_code}): {reason}\n"
+                f"  请到 https://www.juhe.cn/ 个人中心 → 我的数据 → 申请'笑话大全'接口"
+            )
+    return True
+
+
 # ============================================================
 # 笑话 API 测试
 # ============================================================
@@ -55,7 +75,7 @@ def api():
 class TestJokeAPI:
     """笑话大全 API 测试"""
 
-    def test_get_jokes_basic(self, api):
+    def test_get_jokes_basic(self, api, joke_api_available):
         """获取笑话列表 —— 基本冒烟测试"""
         data = api.get_jokes(page=1, pagesize=5)
 
@@ -81,7 +101,7 @@ class TestJokeAPI:
 
             print(f"\n  😂 笑话 {i+1}: {joke['content'][:80]}...")
 
-    def test_get_jokes_pagination(self, api):
+    def test_get_jokes_pagination(self, api, joke_api_available):
         """翻页测试：第1页和第2页内容不重复"""
         page1 = api.get_jokes(page=1, pagesize=5)
         page2 = api.get_jokes(page=2, pagesize=5)
